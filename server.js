@@ -9,7 +9,7 @@ const swaggerUi = require('swagger-ui-express');
 
 // Config
 const port = process.env.PORT || 3000;
-const hostName = process.env.HOSTNAME || 'localhost';
+const hostName = require('os').hostname() || 'localhost';
 const liveTrainsApiUrl = 'https://rata.digitraffic.fi/api/v1/live-trains';
 const compositionsApiUrl = 'https://rata.digitraffic.fi/api/v1/compositions';
 const swaggerUiRoute = '/api-docs';
