@@ -8,9 +8,9 @@ var express = require('express');
 var bodyParser = require('body-parser');
 
 // Config
-var port = process.env.PORT || 3000;
-var trainsApiUrl = 'https://rata.digitraffic.fi/api/v1/live-trains';
-var compositionApiUrl = 'https://rata.digitraffic.fi/api/v1/compositions';
+const port = process.env.PORT || 3000;
+const liveTrainsApiUrl = 'https://rata.digitraffic.fi/api/v1/live-trains';
+const compositionsApiUrl = 'https://rata.digitraffic.fi/api/v1/compositions';
 
 var app = express();
 
@@ -18,65 +18,57 @@ var app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-var trainComposition = function(paramObject, reqApi, resApi) {
-  // TODO: parameter validation and error handling:
+// 1. Get the live-trains data
+// 2. Filter the live-trains data to contain only the queried train numbers
+// 3. Get the compositions data using the departure dates from the filtered live-trains data
+//    - Current date could also be used, but using this is probably more robust for handling 
+//      trains that travel over midnight
+// 4. Format and return the final response by zipping the train data with the compositions data
+var trainComposition = function(stationShortCode, trainNumberString, resApi) {
+  // TODO: parameter validation
 
-  // TODO: Clean up the code to use promises more cleanly, e.g.
-  // the data returned from the 2 APIs can be combined together
-  // more cleanly by the trainNumber as an id.
-
-  var stationShortCode  = paramObject.stationShortCode;
-
-  var trainNumbers = paramObject.trainNumber.split(',').map(Number);
+  const trainNumbers = trainNumberString.split(',').map(Number);
 
   console.log('Query station:' + stationShortCode);
   console.log('Query train numbers:' + trainNumbers);
 
-  var trainsUrl = trainsApiUrl + '?station=' + stationShortCode;
+  const liveTrainsUrl = liveTrainsApiUrl + '?station=' + stationShortCode;
 
   request.get({
-      url: trainsUrl,
+      url: liveTrainsUrl,
       json: true,
       headers: {'User-Agent': 'request'}
-    }, (err, res, data) => {
-      if (err) {
-        console.log('Error:', err);
-      } else if (res.statusCode !== 200) {
-        console.log('Status:', res.statusCode);
-      } else {
-        // data is already parsed as JSON
+    })
+    .then(fullTrainsData => {
 
-        // filter the list by the trainNumbers from the query
-        data = data.filter((trainData) => {
-          return trainNumbers.includes(trainData.trainNumber); 
-        });
+      console.log('Live trains query results:' + fullTrainsData);
 
-        // TODO: sort the data to the same order as the queried numbers? This
-        // was not specified as a requirement, though
+      // filter the array by the trainNumbers from the query
 
-        var compositionUrls = data.map((train) => {
-          // It is probably safer to use the date returned from the 
-          // live-trains API (vs current date), since it 
-          // probably works better with trains that travel over midnight
+      // TODO: Consider sorting the data to the same order as the queried numbers.
+      const trainsData = 
+        fullTrainsData.filter(train => trainNumbers.includes(train.trainNumber));
 
-          return compositionApiUrl + '/' + train.trainNumber + '?departure_date=' + train.departureDate;
-        });
+      const compositionsUrls = 
+        trainsData.map(train => 
+          compositionsApiUrl + '/' + train.trainNumber + '?departure_date=' + train.departureDate);
 
-        console.log('compositionUrls:' + compositionUrls);
+      console.log('compositionsUrls:' + compositionsUrls);
 
-        const compositionPromises = compositionUrls.map((url) => {
-          return request.get({
-              url: url,
-              json: true,
-              headers: {'User-Agent': 'request'}
-            });
-        });
+      var compositionsPromises = compositionsUrls.map((url) => {
+        return request.get({
+            url: url,
+            json: true,
+            headers: {'User-Agent': 'request'}
+          });
+      });
 
-        Promise.all(compositionPromises).then((compositionData) => {
-          console.log('Composition query results:' + compositionData);
+      Promise.all(compositionsPromises)
+        .then((compositionsData) => {
+          console.log('Compositions query results:' + compositionsData);
 
           // Create composition data
-          var resultCompositionData = compositionData.map((composition) => { 
+          const resultCompositionsData = compositionsData.map((composition) => { 
             if (!composition || !composition.journeySections) {
               // Don't reject the whole query, if some train doesn't have
               // composition information
@@ -91,10 +83,11 @@ var trainComposition = function(paramObject, reqApi, resApi) {
                 };
               });              
             } 
-          });
+          })
 
-          // Create the result object 
-          var resultData = data.map((train, index) => {
+          // Create the final result object by zipping the trains data with
+          // the compositions data
+          var resultData = trainsData.map((train, index) => {
             return {
               departureDate: train.departureDate,
               trainName: train.trainType + train.trainNumber,
@@ -102,28 +95,36 @@ var trainComposition = function(paramObject, reqApi, resApi) {
               // The time table rows are ordered by the train's route
               departureStation: train.timeTableRows[0].stationShortCode, 
               destinationStation: train.timeTableRows[train.timeTableRows.length - 1].stationShortCode,
-              composition: resultCompositionData[index]
+              composition: resultCompositionsData[index]
             }
           });
 
-          console.log('Query response:' + resultData);
+          console.log('Query response:' + JSON.stringify(resultData));
 
           resApi.json(resultData);
 
+       })
+        .catch((err) => {
+          console.log('Failed to retrieve data:', err);
+          // Return error with the same status as the wrapped interface
+          resApi.status(err.statusCode).send({ error: 'Failed to retrieve data'});
         });
-
-      }
-  });
+    })
+    .catch((err) => {
+      console.log('Failed to retrieve data:', err);
+      // Return error with the same status as the wrapped interface
+      resApi.status(err.statusCode).send({ error: 'Failed to retrieve data'});
+    });
 }
 
 var getTrainComposition = function(req, res) {
   // TODO: approve also URL parameters?
-  return trainComposition(req.query, req, res);
+  return trainComposition(req.query.stationShortCode, req.query.trainNumber, res);
 }
 
-var postTrainComposition = function(req,res) {
+var postTrainComposition = function(req, res) {
   // TODO: approve also query or URL parameters?
-  return trainComposition(req.body, req, res);
+  return trainComposition(req.body.stationShortCode, req.body.trainNumber, res);
 }
 
 // TODO: add swagger-jsdoc documentation
