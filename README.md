@@ -4,7 +4,9 @@ Trains API
 This repository contains a REST API for querying information about train compositions. It uses
 internally the digitraffic API available at https://rata.digitraffic.fi/ .
 
-## Usage
+The app is deployed in heroku at https://intense-oasis-92112.herokuapp.com/api-docs/ .
+
+## Usage locally
 
 Use `npm install` to install the required dependencies.
 
