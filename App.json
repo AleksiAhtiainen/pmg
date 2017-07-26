@@ -1,0 +1,7 @@
+{
+  "name": "Trains API",
+  "description": "A Trains API Node app",
+  "repository": "https://github.com/AleksiAhtiainen/pmg",
+  "keywords": ["node", "express", "heroku"],
+  "image": "heroku/nodejs"
+}
