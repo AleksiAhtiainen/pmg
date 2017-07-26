@@ -1,6 +1,7 @@
 'use strict';
 
-//var request = require('request');
+// TODO: cleanup console.logs
+
 var request = require('request-promise-native');
 
 var express = require('express');
@@ -10,9 +11,6 @@ var bodyParser = require('body-parser');
 var port = process.env.PORT || 3000;
 var trainsApiUrl = 'https://rata.digitraffic.fi/api/v1/live-trains';
 var compositionApiUrl = 'https://rata.digitraffic.fi/api/v1/compositions';
-
-//var trainsUrl = 'https://rata.digitraffic.fi/api/v1/live-trains?station=';
-//var compositionsUrl = 'https://rata.digitraffic.fi/api/v1/compositions/<train>?departure_data=<date>';
 
 var app = express();
 
@@ -56,14 +54,10 @@ var trainComposition = function(paramObject, reqApi, resApi) {
         // TODO: sort the data to the same order as the queried numbers? This
         // was not specified as a requirement, though
 
-        // TODO: Get the compositions
-        // Do this using multiple asynchronous requests? On the other hand,
-        // it might overflow the compositions API, so doing this in sequence might
-        // actually be better.
-
         var compositionUrls = data.map((train) => {
-          // It is probably safer to use the date returned from the live-trains API (vs current date), since it 
-          // probably works better with trains that travel across midnight
+          // It is probably safer to use the date returned from the 
+          // live-trains API (vs current date), since it 
+          // probably works better with trains that travel over midnight
 
           return compositionApiUrl + '/' + train.trainNumber + '?departure_date=' + train.departureDate;
         });
@@ -83,14 +77,20 @@ var trainComposition = function(paramObject, reqApi, resApi) {
 
           // Create composition data
           var resultCompositionData = compositionData.map((composition) => { 
-            return composition.journeySections.map((journeySection) => {
-              return {
-                from: journeySection.beginTimeTableRow.stationShortCode,
-                to: journeySection.endTimeTableRow.stationShortCode,
-                wagons: journeySection.wagons,
-                locomotives: journeySection.locomotives
-              };
-            });
+            if (!composition || !composition.journeySections) {
+              // Don't reject the whole query, if some train doesn't have
+              // composition information
+              return undefined;
+            } else {
+              return composition.journeySections.map((journeySection) => {
+                return {
+                  from: journeySection.beginTimeTableRow.stationShortCode,
+                  to: journeySection.endTimeTableRow.stationShortCode,
+                  wagons: journeySection.wagons,
+                  locomotives: journeySection.locomotives
+                };
+              });              
+            } 
           });
 
           // Create the result object 
@@ -117,15 +117,18 @@ var trainComposition = function(paramObject, reqApi, resApi) {
 }
 
 var getTrainComposition = function(req, res) {
+  // TODO: approve also URL parameters?
   return trainComposition(req.query, req, res);
 }
 
 var postTrainComposition = function(req,res) {
+  // TODO: approve also query or URL parameters?
   return trainComposition(req.body, req, res);
 }
 
+// TODO: add swagger-jsdoc documentation
 app.route('/train-composition')
-  .get(getTrainComposition)
+  .get(getTrainComposition) // TODO: Remove GET, not required in the specification
   .post(postTrainComposition);
 
 app.listen(port);
