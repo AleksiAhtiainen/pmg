@@ -15,10 +15,10 @@ Use `node server` to start up the server.
 The Main API is available as POST endpoint at http://localhost:3000/train-composition. 
 Its required parameters are specified in JSON body, e.g.:
 
-  { 
-    stationShortCode: SLO,  // Specifies the station short code
-    trainNumber: 197,194    // Specifies the numbers of the trains to retrieve
-  }
+    { 
+      stationShortCode: SLO,  // Specifies the station short code
+      trainNumber: 197,194    // Specifies the numbers of the trains to retrieve
+    }
 
 More detailed REST API documentation is hosted by the node app itself using Swagger UI. 
 It is hosted by default at http://localhost:3000/api-docs/ .
