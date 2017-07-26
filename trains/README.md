@@ -28,12 +28,15 @@ It is hosted by default at http://localhost:3000/api-docs/ .
 To reach production quality, the following should still be done:
 
 1. Add automatic/unit tests
-1. Better error management
+1. Better error management (messages, error codes)
 1. Host the API using HTTPS instead of HTTP
+1. Limit the amount of operations done to digitraffic API. Now the implementation starts several composition
+queries in parallel which might end up returning errors or timeouting due to limits in the digitraffic API
+implementation.
 1. Add validation for the input parameters
 1. Support also GET operation
 1. Support for form parameters
 1. Clean up the debug logging
 1. Consider sorting the response in the same order as the trainNumber list from user
-1. Consider making trainNumber an optional parameter
+1. Consider making parameters optional
 1. Consider splitting the implementation to couple modules instead of single `server.js` file

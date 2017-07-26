@@ -149,13 +149,11 @@ const postTrainComposition = function(req, res) {
  *         description: End station of the composition
  *         type: string
  *       wagons:
- *         type: string
- *         format: json
- *         description: Wagon information as JSON returned by the digitraffic API
+ *         type: object
+ *         description: Wagon information as JSON returned by the digitraffic API. See https://rata.digitraffic.fi/api/v1/doc/index.html#Kokoonpanovastaus .
  *       locomotives:
- *         type: string
- *         format: json
- *         description: Locomotive information as JSON returned by the digitraffic API
+ *         type: object
+ *         description: Locomotive information as JSON returned by the digitraffic API. See https://rata.digitraffic.fi/api/v1/doc/index.html#Kokoonpanovastaus .
  *   Train:
  *     type: object
  *     properties:
