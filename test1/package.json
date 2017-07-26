@@ -2,7 +2,7 @@
   "name": "test1",
   "version": "0.0.1",
   "description": "Train API",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,6 +12,9 @@
     "body-parser": "^1.17.2",
     "express": "^4.15.3",
     "request": "^2.81.0",
-    "request-promise-native": "^1.0.4"
+    "request-promise-native": "^1.0.4",
+    "swagger-jsdoc": "^1.9.7",
+    "swagger-ui": "^3.0.21",
+    "swagger-ui-express": "^2.0.3"
   }
 }
