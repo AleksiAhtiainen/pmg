@@ -22,7 +22,8 @@ const swaggerSpec = swaggerJsDoc({
       version: '0.0.1',
       description: 'API for retrieving information about trains'
     },
-    host: hostName + ':' + port,
+    host: hostName + 
+      (process.env.NODE && ~process.env.NODE.indexOf("heroku")) ? '' : (':' + port),
     basePath: '/'
   },
   apis: ['./server.js']
