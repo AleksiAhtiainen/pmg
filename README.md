@@ -23,7 +23,7 @@ Its required parameters are specified in JSON body, e.g.:
     }
 
 More detailed REST API documentation is hosted by the node app itself using Swagger UI. 
-It is hosted by default at http://localhost:3000/api-docs/ .
+When running locally, it is hosted at http://localhost:3000/api-docs/ .
 
 ## Information about the implementation
 
