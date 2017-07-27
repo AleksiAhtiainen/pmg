@@ -35,107 +35,127 @@ var app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Main algorithm:
+// Returns a promise that retrieves raw compositions data from
+// the digitraffic REST API for the trains in the rawTrainsData
+// array
+const promiseRawCompositions = function(rawTrainsData) {
+  const rawCompositionsUrls = 
+    rawTrainsData.map(rawTrain => 
+      compositionsApiUrl + '/' + rawTrain.trainNumber + '?departure_date=' + rawTrain.departureDate);
+
+  console.log('rawCompositionsUrls:' + rawCompositionsUrls);
+
+  var rawCompositionsPromises = rawCompositionsUrls.map((url) => {
+    return request.get({
+        url: url,
+        json: true,
+        headers: {'User-Agent': 'request'}
+      });
+  });
+
+  return Promise.all(rawCompositionsPromises)
+};
+
+// Returns the final compositions data array based on the
+// rawCompositions in digitraffic API format.
+const createCompositionsData = function(rawCompositions) {
+  // Create result composition data
+  const compositionsData = rawCompositions.map((rawComposition) => { 
+    if (!rawComposition || !rawComposition.journeySections) {
+      // Don't reject the whole query, if some train doesn't have
+      // composition information (e.g. cargo trains don't have)
+      return undefined;
+    } else {
+      return rawComposition.journeySections.map((journeySection) => {
+        return {
+          from: journeySection.beginTimeTableRow.stationShortCode,
+          to: journeySection.endTimeTableRow.stationShortCode,
+          wagons: journeySection.wagons,
+          locomotives: journeySection.locomotives
+        };
+      });              
+    } 
+  })
+
+  return compositionsData;
+};
+
+// Main algorithm: Sends a JSON response to the resApi.
 //
-// 1. Get the live-trains data from digitraffic
-// 2. Filter the live-trains data to contain only the queried train numbers
-// 3. Get the compositions data from digitraffic using the departure dates from the filtered live-trains data
+// 1. Input processing, convert string of numbers into array of numbers
+// 2. Get the live-trains data from digitraffic
+// 3. Filter the live-trains data to contain only the queried train numbers
+// 4. Get the compositions data from digitraffic using the departure dates from the filtered live-trains data
 //    - Current date could also be used, but using retrieve departure date is probably more robust for handling 
 //      trains that travel over midnight
-// 4. Format and return the final response by zipping the train data with the compositions data
+// 5. Format the final result compositions data
+// 6. Format and return the final response by zipping the train data with the compositions data
 const trainComposition = function(stationShortCode, trainNumberString, resApi) {
 
-  // 1. Get the live-trains data from digitraffic
+  // 1. Input processing, convert string of numbers into array of numbers
   const trainNumbers = trainNumberString.split(',').map(Number);
-
   console.log('Query station:' + stationShortCode);
   console.log('Query train numbers:' + trainNumbers);
 
-  const liveTrainsUrl = liveTrainsApiUrl + '?station=' + stationShortCode;
-
-  request.get({
-      url: liveTrainsUrl,
-      json: true,
-      headers: {'User-Agent': 'request'}
-    })
-    .then(fullTrainsData => {
-
-      console.log('Live trains query results:' + fullTrainsData);
-
-      // 2. Filter the live-trains data to contain only the queried train numbers
-      const trainsData = 
-        fullTrainsData.filter(train => trainNumbers.includes(train.trainNumber));
-
-      // 3. Get the compositions data
-      const compositionsUrls = 
-        trainsData.map(train => 
-          compositionsApiUrl + '/' + train.trainNumber + '?departure_date=' + train.departureDate);
-
-      console.log('compositionsUrls:' + compositionsUrls);
-
-      var compositionsPromises = compositionsUrls.map((url) => {
-        return request.get({
-            url: url,
-            json: true,
-            headers: {'User-Agent': 'request'}
-          });
+  // 2. Get the live-trains data from digitraffic
+  const rawTrainsUrl = liveTrainsApiUrl + '?station=' + stationShortCode;
+  const rawTrainsDataPromise = 
+    request.get({
+        url: rawTrainsUrl,
+        json: true,
+        headers: {'User-Agent': 'request'}
+      })
+      .then(fullRawTrainsData => {
+        // 3. Filter the live-trains data to contain only the queried train numbers
+        console.log('Live trains query results:' + fullRawTrainsData);
+        return fullRawTrainsData.filter(rawTrain => trainNumbers.includes(rawTrain.trainNumber));
       });
 
-      Promise.all(compositionsPromises)
-        .then((compositionsData) => {
-          console.log('Compositions query results:' + compositionsData);
+  // 4. Get the compositions data from digitraffic
+  const compositionsDataPromise = 
+    rawTrainsDataPromise
+    .then(rawTrainsData => {
+      return promiseRawCompositions(rawTrainsData);
+    })
+    .then(rawCompositionsData => {
+      // 5. Format the final result compositions data
+      console.log('Compositions query results:' + rawCompositionsData);
 
-          // Create composition data
-          const resultCompositionsData = compositionsData.map((composition) => { 
-            if (!composition || !composition.journeySections) {
-              // Don't reject the whole query, if some train doesn't have
-              // composition information
-              return undefined;
-            } else {
-              return composition.journeySections.map((journeySection) => {
-                return {
-                  from: journeySection.beginTimeTableRow.stationShortCode,
-                  to: journeySection.endTimeTableRow.stationShortCode,
-                  wagons: journeySection.wagons,
-                  locomotives: journeySection.locomotives
-                };
-              });              
-            } 
-          })
+      return createCompositionsData(rawCompositionsData);
+    });
 
-          // 4. Format and return the final response by zipping the trains data with
-          // the compositions data
-          const resultData = trainsData.map((train, index) => {
-            return {
-              departureDate: train.departureDate,
-              trainName: train.trainType + train.trainNumber,
+  // 6. Format and return the final response by zipping the trains data with
+  // the compositions data
+  return Promise.all([rawTrainsDataPromise, compositionsDataPromise])
+    .then(values => {
+      // Bluebird's spread function would be cleaner, 
+      // but since I started with built-in Promises, 
+      // let's stick to them.
+      const rawTrainsData = values[0];  
+      const compositionsData = values[1];
 
-              // The time table rows are ordered by the train's route
-              departureStation: train.timeTableRows[0].stationShortCode, 
-              destinationStation: train.timeTableRows[train.timeTableRows.length - 1].stationShortCode,
-              composition: resultCompositionsData[index]
-            }
-          });
+      return rawTrainsData.map((rawTrain, index) => {
+        return {
+          departureDate: rawTrain.departureDate,
+          trainName: rawTrain.trainType + rawTrain.trainNumber,
 
-          console.log('Query response:' + JSON.stringify(resultData));
+          // The time table rows are ordered by the train's route
+          departureStation: rawTrain.timeTableRows[0].stationShortCode, 
+          destinationStation: rawTrain.timeTableRows[rawTrain.timeTableRows.length - 1].stationShortCode,
 
-          resApi.json(resultData);
-       })
-        .catch((err) => {
-          console.log('Failed to retrieve data:', err);
-          // Return error with the same status as the wrapped interface
-          resApi.status(err.statusCode).send({ error: 'Failed to retrieve data'});
-        });
+          composition: compositionsData[index]
+        }
+      });
+    })
+    .then(resultData => {
+      console.log('Query response:' + JSON.stringify(resultData));
+      resApi.json(resultData);      
     })
     .catch((err) => {
       console.log('Failed to retrieve data:', err);
       // Return error with the same status as the wrapped interface
       resApi.status(err.statusCode).send({ error: 'Failed to retrieve data'});
     });
-}
-
-const postTrainComposition = function(req, res) {
-  return trainComposition(req.body.stationShortCode, req.body.trainNumber, res);
 }
 
 /**
@@ -209,7 +229,10 @@ const postTrainComposition = function(req, res) {
  *         schema:
  *           $ref: '#/definitions/Train'
  */
-app.post('/train-composition', postTrainComposition);
+app.post('/train-composition', (req,res) => {
+  return trainComposition(req.body.stationShortCode, req.body.trainNumber, res)
+});
+
 app.use(swaggerUiRoute, swaggerUi.serve, swaggerUi.setup(swaggerSpec, true));
 
 app.listen(port);
